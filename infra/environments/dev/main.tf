@@ -105,7 +105,7 @@ resource "google_sql_database_instance" "postgres_db" {
     
     ip_configuration {
       ipv4_enabled = true
-      require_ssl  = false
+      ssl_mode     = "ALLOW_UNENCRYPTED_AND_ENCRYPTED"
     }
   }
   
@@ -120,13 +120,13 @@ resource "random_id" "db_suffix" {
 # Application server for additional workloads
 resource "google_compute_instance" "app_server" {
   name         = "demo-app-server"
-  machine_type = "e2-micro"
+  machine_type = "e2-small"
   zone         = "us-central1-a"
 
   boot_disk {
     initialize_params {
       image = "debian-cloud/debian-11"
-      size  = 10
+      size  = 20
     }
   }
 
@@ -141,6 +141,7 @@ resource "google_compute_instance" "app_server" {
   labels = {
     environment = "dev"
     purpose     = "demo"
+    managed_by  = "terraform"
   }
 
   service_account {
