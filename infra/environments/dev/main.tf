@@ -13,24 +13,23 @@ provider "google" {
   region  = "us-central1"
 }
 
-# Application data storage bucket (renamed from assets_bucket to match policy)
+# Data storage bucket for application
 resource "google_storage_bucket" "data_bucket" {
   name     = "gcp-demo-data-bucket-${random_id.bucket_suffix.hex}"
   location = "US"
   
-  uniform_bucket_level_access = true
-  public_access_prevention = "enforced"
+  uniform_bucket_level_access = false
   
   versioning {
     enabled = true
   }
 }
 
-# Secure bucket access - only for authenticated service accounts
-resource "google_storage_bucket_iam_member" "app_access" {
+# Public access configuration for data bucket
+resource "google_storage_bucket_iam_member" "data_bucket_public" {
   bucket = google_storage_bucket.data_bucket.name
-  role   = "roles/storage.objectAdmin"
-  member = "serviceAccount:${google_service_account.app_service_account.email}"
+  role   = "roles/storage.objectViewer"
+  member = "allUsers"
 }
 
 # Service account for application workloads
@@ -91,9 +90,9 @@ resource "random_id" "bucket_suffix" {
   byte_length = 4
 }
 
-# PostgreSQL database for application data (renamed to match policy)
+# PostgreSQL database for application data
 resource "google_sql_database_instance" "postgres_db" {
-  name             = "demo-database-${random_id.db_suffix.hex}"
+  name             = "postgres-database-${random_id.db_suffix.hex}"
   database_version = "POSTGRES_15"
   region           = "us-central1"
   
@@ -106,7 +105,7 @@ resource "google_sql_database_instance" "postgres_db" {
     
     ip_configuration {
       ipv4_enabled = true
-      ssl_mode = "ENCRYPTED_ONLY"
+      require_ssl  = false
     }
   }
   
@@ -160,67 +159,40 @@ resource "google_compute_instance" "app_server" {
     echo "<p>Server configured via Terraform</p>" >> /var/www/html/index.html
   EOF
 
-  tags = ["http-server", "https-server", "ssh-server"]
+  tags = ["web-server", "ssh-server"]
 }
 
-# Firewall rule to allow HTTP/HTTPS traffic to the app server
-resource "google_compute_firewall" "allow_http" {
-  name    = "allow-http-demo"
+# Firewall rule for web traffic and SSH access
+resource "google_compute_firewall" "web_firewall" {
+  name    = "web-firewall-demo"
   network = "default"
 
   allow {
     protocol = "tcp"
-    ports    = ["80", "443"]
+    ports    = ["22", "80", "443"]
   }
 
   source_ranges = ["0.0.0.0/0"]
-  target_tags   = ["http-server", "https-server"]
+  target_tags   = ["web-server", "ssh-server"]
 }
 
-# Secure SSH firewall rule (renamed to match policy)
-resource "google_compute_firewall" "web_firewall" {
-  name    = "allow-ssh-restricted"
-  network = "default"
-
-  allow {
-    protocol = "tcp"
-    ports    = ["22"]
-  }
-
-  # Restrict SSH access to specific IP ranges instead of 0.0.0.0/0
-  source_ranges = ["10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16"]
-  target_tags   = ["ssh-server"]
-}
-
-# GKE cluster for container workloads (added to match policy)
+# GKE cluster for container workloads
 resource "google_container_cluster" "k8s_cluster" {
-  name     = "demo-gke-cluster"
+  name     = "demo-k8s-cluster"
   location = "us-central1-a"
-
-  # Disable legacy ABAC to fix policy violation
-  enable_legacy_abac = false
   
-  # Remove default node pool as we'll create a custom one
   remove_default_node_pool = true
   initial_node_count       = 1
-
-  # Enable network policy for security
-  network_policy {
-    enabled = true
-  }
-
-  # Enable Workload Identity for secure pod-to-GCP service communication
-  workload_identity_config {
-    workload_pool = "gcp-terraform-demo-project.svc.id.goog"
-  }
-
-  # Enable Shielded Nodes for additional security
-  enable_shielded_nodes = true
+  
+  enable_legacy_abac = true
+  
+  network    = "default"
+  subnetwork = "default"
 }
 
-# Custom node pool for the GKE cluster
-resource "google_container_node_pool" "primary_nodes" {
-  name       = "primary-node-pool"
+# Node pool for the GKE cluster
+resource "google_container_node_pool" "k8s_nodes" {
+  name       = "demo-node-pool"
   location   = "us-central1-a"
   cluster    = google_container_cluster.k8s_cluster.name
   node_count = 1
@@ -228,17 +200,10 @@ resource "google_container_node_pool" "primary_nodes" {
   node_config {
     preemptible  = true
     machine_type = "e2-medium"
-
-    # Google recommends custom service accounts with minimal permissions
+    
     service_account = google_service_account.app_service_account.email
     oauth_scopes = [
       "https://www.googleapis.com/auth/cloud-platform"
     ]
-
-    # Enable Shielded Nodes features
-    shielded_instance_config {
-      enable_secure_boot          = true
-      enable_integrity_monitoring = true
-    }
   }
 }

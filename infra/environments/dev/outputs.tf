@@ -24,17 +24,6 @@ output "database_connection_name" {
   value       = google_sql_database_instance.postgres_db.connection_name
 }
 
-output "gke_cluster_name" {
-  description = "Name of the GKE cluster"
-  value       = google_container_cluster.k8s_cluster.name
-}
-
-output "gke_cluster_endpoint" {
-  description = "GKE cluster endpoint"
-  value       = google_container_cluster.k8s_cluster.endpoint
-  sensitive   = true
-}
-
 output "app_server_name" {
   description = "Name of the compute instance"
   value       = google_compute_instance.app_server.name
@@ -53,4 +42,15 @@ output "app_server_internal_ip" {
 output "app_server_zone" {
   description = "Zone where the compute instance is deployed"
   value       = google_compute_instance.app_server.zone
+}
+
+output "k8s_cluster_name" {
+  description = "Name of the GKE cluster"
+  value       = google_container_cluster.k8s_cluster.name
+}
+
+output "k8s_cluster_endpoint" {
+  description = "Endpoint for the GKE cluster"
+  value       = google_container_cluster.k8s_cluster.endpoint
+  sensitive   = true
 }
