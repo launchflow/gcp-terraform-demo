@@ -120,13 +120,13 @@ resource "random_id" "db_suffix" {
 # Application server for additional workloads
 resource "google_compute_instance" "app_server" {
   name         = "demo-app-server"
-  machine_type = "e2-small"
+  machine_type = "e2-micro"
   zone         = "us-central1-a"
 
   boot_disk {
     initialize_params {
       image = "debian-cloud/debian-11"
-      size  = 20
+      size  = 10
     }
   }
 
@@ -141,7 +141,6 @@ resource "google_compute_instance" "app_server" {
   labels = {
     environment = "dev"
     purpose     = "demo"
-    managed_by  = "terraform"
   }
 
   service_account {
