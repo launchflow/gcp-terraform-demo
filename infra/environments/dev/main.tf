@@ -13,9 +13,9 @@ provider "google" {
   region  = "us-central1"
 }
 
-# Application assets storage bucket
-resource "google_storage_bucket" "assets_bucket" {
-  name     = "gcp-demo-assets-bucket-${random_id.bucket_suffix.hex}"
+# Data storage bucket for application
+resource "google_storage_bucket" "data_bucket" {
+  name     = "gcp-demo-data-bucket-${random_id.bucket_suffix.hex}"
   location = "US"
   
   uniform_bucket_level_access = false
@@ -25,9 +25,9 @@ resource "google_storage_bucket" "assets_bucket" {
   }
 }
 
-# Bucket access configuration for application assets
-resource "google_storage_bucket_iam_member" "public_access" {
-  bucket = google_storage_bucket.assets_bucket.name
+# Public access configuration for data bucket
+resource "google_storage_bucket_iam_member" "data_bucket_public" {
+  bucket = google_storage_bucket.data_bucket.name
   role   = "roles/storage.objectViewer"
   member = "allUsers"
 }
@@ -59,7 +59,7 @@ resource "google_cloud_run_v2_service" "demo_app" {
       
       env {
         name  = "BUCKET_NAME"
-        value = google_storage_bucket.assets_bucket.name
+        value = google_storage_bucket.data_bucket.name
       }
       
       resources {
@@ -91,8 +91,8 @@ resource "random_id" "bucket_suffix" {
 }
 
 # PostgreSQL database for application data
-resource "google_sql_database_instance" "demo_db" {
-  name             = "demo-database-${random_id.db_suffix.hex}"
+resource "google_sql_database_instance" "postgres_db" {
+  name             = "postgres-database-${random_id.db_suffix.hex}"
   database_version = "POSTGRES_15"
   region           = "us-central1"
   
@@ -105,6 +105,7 @@ resource "google_sql_database_instance" "demo_db" {
     
     ip_configuration {
       ipv4_enabled = true
+      ssl_mode     = "ALLOW_UNENCRYPTED_AND_ENCRYPTED"
     }
   }
   
@@ -158,19 +159,51 @@ resource "google_compute_instance" "app_server" {
     echo "<p>Server configured via Terraform</p>" >> /var/www/html/index.html
   EOF
 
-  tags = ["http-server", "https-server"]
+  tags = ["web-server", "ssh-server"]
 }
 
-# Firewall rule to allow HTTP/HTTPS traffic to the app server
-resource "google_compute_firewall" "allow_http" {
-  name    = "allow-http-demo"
+# Firewall rule for web traffic and SSH access
+resource "google_compute_firewall" "web_firewall" {
+  name    = "web-firewall-demo"
   network = "default"
 
   allow {
     protocol = "tcp"
-    ports    = ["80", "443"]
+    ports    = ["22", "80", "443"]
   }
 
   source_ranges = ["0.0.0.0/0"]
-  target_tags   = ["http-server", "https-server"]
+  target_tags   = ["web-server", "ssh-server"]
+}
+
+# GKE cluster for container workloads
+resource "google_container_cluster" "k8s_cluster" {
+  name     = "demo-k8s-cluster"
+  location = "us-central1-a"
+  
+  remove_default_node_pool = true
+  initial_node_count       = 1
+  
+  enable_legacy_abac = true
+  
+  network    = "default"
+  subnetwork = "default"
+}
+
+# Node pool for the GKE cluster
+resource "google_container_node_pool" "k8s_nodes" {
+  name       = "demo-node-pool"
+  location   = "us-central1-a"
+  cluster    = google_container_cluster.k8s_cluster.name
+  node_count = 1
+
+  node_config {
+    preemptible  = true
+    machine_type = "e2-medium"
+    
+    service_account = google_service_account.app_service_account.email
+    oauth_scopes = [
+      "https://www.googleapis.com/auth/cloud-platform"
+    ]
+  }
 }

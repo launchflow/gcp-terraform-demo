@@ -1,12 +1,12 @@
 
 output "bucket_name" {
   description = "Name of the created storage bucket"
-  value       = google_storage_bucket.assets_bucket.name
+  value       = google_storage_bucket.data_bucket.name
 }
 
 output "bucket_url" {
   description = "URL of the storage bucket"
-  value       = google_storage_bucket.assets_bucket.url
+  value       = google_storage_bucket.data_bucket.url
 }
 
 output "cloud_run_url" {
@@ -21,7 +21,7 @@ output "service_account_email" {
 
 output "database_connection_name" {
   description = "Connection name for the SQL database"
-  value       = google_sql_database_instance.demo_db.connection_name
+  value       = google_sql_database_instance.postgres_db.connection_name
 }
 
 output "app_server_name" {
@@ -42,4 +42,15 @@ output "app_server_internal_ip" {
 output "app_server_zone" {
   description = "Zone where the compute instance is deployed"
   value       = google_compute_instance.app_server.zone
+}
+
+output "k8s_cluster_name" {
+  description = "Name of the GKE cluster"
+  value       = google_container_cluster.k8s_cluster.name
+}
+
+output "k8s_cluster_endpoint" {
+  description = "Endpoint for the GKE cluster"
+  value       = google_container_cluster.k8s_cluster.endpoint
+  sensitive   = true
 }
